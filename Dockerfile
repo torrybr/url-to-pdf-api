@@ -1,28 +1,32 @@
-FROM node:10
+FROM alpeware/chrome-headless-trunk:rev-786673
+# install dependencies
+RUN echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" | debconf-set-selections
+RUN apt-get update -y &&\
+ DEBIAN_FRONTEND=noninteractive apt-get install -yq\
+ fontconfig fonts-dejavu ttf-mscorefonts-installer curl gnupg git &&\
+ rm -rf /var/lib/apt/lists/*
+# install node
+RUN curl -sL https://deb.nodesource.com/setup_12.x  | bash -
+RUN apt-get -y install nodejs
+# Create an app user so our application doesn't run as root.
+RUN groupadd -r app &&\
+    useradd -r -g app -d /home/app -s /sbin/nologin -c "Docker image user" app
+# Create app directory
+ENV HOME=/home/app
+ENV APP_HOME=/home/app/pdf-rendering-srv
+## SETTING UP THE APP ##
+RUN mkdir $HOME
+WORKDIR $HOME
+# Chown all the files to the app user.
+RUN chown -R app:app $HOME
+RUN pwd
+# Change to the app user.
+USER app
+RUN git clone https://github.com/alvarcarto/url-to-pdf-api pdf-rendering-srv
+WORKDIR $APP_HOME
+RUN npm install --only=prod
 
+HEALTHCHECK CMD curl -I http://localhost:9000/
 
-WORKDIR /usr/src/app
-ENV NODE_ENV production
-ENV PORT 9000
 EXPOSE 9000
-
-RUN apt-get update \
-    && apt-get install -yq \
-        gconf-service libasound2 libatk1.0-0 libc6 \
-        libcairo2 libcups2 libdbus-1-3 libexpat1 libfontconfig1 \
-        libgcc1 libgconf-2-4 libgdk-pixbuf2.0-0 libglib2.0-0 \
-        libgtk-3-0 libnspr4 libpango-1.0-0 libpangocairo-1.0-0 \
-        libstdc++6 libx11-6 libx11-xcb1 libxcb1 libxcomposite1 \
-        libxcursor1 libxdamage1 libxext6 libxfixes3 libxi6 libxrandr2 \
-        libxrender1 libxss1 libxtst6 ca-certificates fonts-liberation \
-        libappindicator1 libnss3 lsb-release xdg-utils wget \
-    && rm -r /var/lib/apt/lists/*
-
-COPY package.json .
-COPY package-lock.json .
-
-RUN yarn install --frozen-lockfile
-
-COPY . .
-
-CMD ["node", "src/index.js"]
+CMD [ "node", "." ]
